@@ -29,6 +29,7 @@ import androidx.core.graphics.drawable.DrawableCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
-
+        MapsInitializer.initialize(applicationContext)
         super.onCreate(savedInstanceState)
         setContent {
             NMEATheme {
