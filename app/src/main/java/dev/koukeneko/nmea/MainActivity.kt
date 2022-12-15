@@ -9,33 +9,37 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.location.OnNmeaMessageListener
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.res.imageResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import dev.koukeneko.nmea.ui.theme.NMEATheme
+import dev.koukeneko.nmea.utility.ImgUtil
+import dev.koukeneko.nmea.utility.ImgUtil.px
+
 
 class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListener {
 
@@ -155,18 +159,6 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
         )
     }
 
-    // Function that converts the vector form to Bitmap form.
-    private fun getBitmapFromVectorDrawable(context: Context, drawableId: Int): Bitmap {
-        val drawable = ContextCompat.getDrawable(context, drawableId)
-        val bitmap = Bitmap.createBitmap(
-            drawable!!.intrinsicWidth,
-            drawable.intrinsicHeight, Bitmap.Config.ARGB_8888
-        )
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
-        drawable.draw(canvas)
-        return bitmap
-    }
 
     @Preview
     @Composable
@@ -177,9 +169,13 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
         val kaohsiung = LatLng(22.63, 120.27)
         val taipei = LatLng(25.04, 121.5)
 
-        //create a bitmap marker from vector drawable baseline_my_location_24
-        val bitmap = getBitmapFromVectorDrawable(this, R.drawable.baseline_my_location_24)
-        val bitmapDescriptor = BitmapDescriptorFactory.fromBitmap(bitmap)
+
+        val icon = ImgUtil.getBitmapDescriptor(
+            this,
+            R.drawable.baseline_my_location_24,
+            24.px,
+            24.px
+        )
 
 
         //build camera position
@@ -213,7 +209,7 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                     state = MarkerState(position = current),
                     title = "Current",
                     snippet = "Marker in Current",
-                    icon = bitmapDescriptor
+                    icon = icon
                 )
             }
         }
