@@ -9,22 +9,30 @@ import android.location.LocationManager
 import android.location.OnNmeaMessageListener
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -34,6 +42,7 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import dev.koukeneko.nmea.ui.theme.NMEATheme
+import dev.koukeneko.nmea.utility.CustomDialog
 import dev.koukeneko.nmea.utility.NMEAFormatter
 
 
@@ -41,28 +50,55 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
 
     private lateinit var locationManager: LocationManager
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+
+    var isLocationPermissionGranted = mutableStateOf(false)
+
     var datanmea = ""
 
-    val current_Latitude = mutableStateOf(0.0)
-    val current_Longitude = mutableStateOf(0.0)
+    val current_Latitude = mutableStateOf(-1.0)
+    val current_Longitude = mutableStateOf(-1.0)
 
-    var NMEASet = mutableSetOf<dev.koukeneko.nmea.data.Location>(dev.koukeneko.nmea.data.Location(0.0, 0.0))
+    var nmea_latitude = mutableStateOf(-1.0)
+    var nmea_longitude = mutableStateOf(-1.0)
+
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
         MapsInitializer.initialize(applicationContext) //for initialize IBitmapDescriptorFactory
         super.onCreate(savedInstanceState)
+//        window.setFlags(
+//            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+//            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+//        )
+
+
         setContent {
             NMEATheme {
+                val systemUiController = rememberSystemUiController()
+                val useDarkIcons = !isSystemInDarkTheme()
+
+                val color = MaterialTheme.colorScheme.background
+                SideEffect {
+                    systemUiController.setNavigationBarColor(
+                        color = color,
+                        darkIcons = useDarkIcons
+                    )
+
+                    systemUiController.setStatusBarColor(
+                        color = color,
+                        darkIcons = useDarkIcons
+                    )
+                }
                 // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     InitGPSGettingLogic()
-                    Greeting()
                     GetCurrentLocation()
+                    if (isLocationPermissionGranted.value)
+                        Greeting()
                 }
             }
         }
@@ -128,7 +164,7 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
             } else {
                 // If the app has the permission, access the device's location
                 // (e.g. to display a map or provide location-based services)
-
+                isLocationPermissionGranted.value = true
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
                     10000,
@@ -162,15 +198,15 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
         val nmea = NMEAFormatter(message.toString()).getLatLong()
         //check nmea whether is null
         if (nmea != null) {
-            NMEASet.add(nmea)
+            nmea_latitude.value = nmea.latitude
+            nmea_longitude.value = nmea.longitude
         }
-        if (NMEASet.size > 20) {
-            NMEASet.remove(NMEASet.first())
-        }
-        Log.d("NMEAFormatter", nmea.toString())
-        Log.d("NMEASet_APP", NMEASet.toString())
+
+        Log.d("NMEA_APP", "nmea_latitude : ${nmea_latitude.value}")
+        Log.d("NMEA_APP", "nmea_longitude : ${nmea_longitude.value}")
 
     }
+
 
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -183,6 +219,13 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
         val kaohsiung = LatLng(22.63, 120.27)
         val taipei = LatLng(25.04, 121.5)
 
+
+
+        var manual_latitude by remember { mutableStateOf(-1.0) }
+        var manual_longitude by remember { mutableStateOf(-1.0) }
+        var openDialog by remember { mutableStateOf(false) }
+        var editMessage by remember { mutableStateOf("") }
+        var editMessage1 by remember { mutableStateOf("") }
 
         //build camera position
         val cameraPosition = rememberCameraPositionState {
@@ -211,8 +254,6 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
             )
         }
 
-        //create a set store markers
-
 
         val settings = MapUiSettings(
             myLocationButtonEnabled = true,
@@ -221,101 +262,193 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
             zoomGesturesEnabled = true,
             tiltGesturesEnabled = true,
             rotationGesturesEnabled = true,
-            compassEnabled = true
-        )
+            compassEnabled = true,
+            zoomControlsEnabled = true,
+            indoorLevelPickerEnabled = true,
 
-        Column(modifier = Modifier.fillMaxSize()) {
+            )
 
-            Card(
+        Box {
+            Column(
                 modifier = Modifier
-                    .padding(16.dp),
-
-                shape = RoundedCornerShape(16.dp)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp)
+                    .fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                GoogleMap(
-                    modifier = Modifier,
-                    cameraPositionState = cameraPosition,
-                    uiSettings = settings,
+                Text(
+                    "Location Checker Demo",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+
+                )
+
+                Card(
+                    modifier = Modifier
+                        .height(550.dp),
+                    //                    .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    GoogleMap(
+                        modifier = Modifier,
+                        cameraPositionState = cameraPosition,
+                        uiSettings = settings,
+                        properties = MapProperties(
+                            mapType = MapType.SATELLITE,
+                            isMyLocationEnabled = true,
+                            isBuildingEnabled = true,
+
+                            )
 
                     ) {
 
-                    Marker(
-                        state = MarkerState(position = current),
-                        title = "Current",
-                        snippet = "Marker in Current",
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
-                    )
+                        //if nmea_latitude.value and nmea_longitude.value change, marker will change
+                        Marker(
+                            state = MarkerState(
+                                position = LatLng(
+                                    nmea_latitude.value,
+                                    nmea_longitude.value
+                                )
+                            ),
+                            visible = nmea_latitude.value != -1.0 && nmea_longitude.value != -1.0,
+                            title = "NMEA",
+                            snippet = "${nmea_latitude.value},${nmea_longitude.value}",
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+                        )
 
-                    //put the marker on the map
-                    Marker(
-                        state = MarkerState(position = kaohsiung),
-                        title = "Kaohsiung",
-                        snippet = "Marker in Kaohsiung",
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
-                    )
+                        Marker(
+                            state = MarkerState(
+                                position = LatLng(
+                                    manual_latitude,
+                                    manual_longitude
+                                )
+                            ),
+                            visible = manual_latitude != -1.0 && manual_latitude != -1.0,
+                            title = "Manual",
+                            snippet = "${manual_latitude},${manual_longitude}",
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                        )
 
-                    Marker(
-                        state = MarkerState(
-                            position = LatLng(
-                                NMEASet.first().latitude,
-                                NMEASet.first().longitude
-                            )
-                        ),
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_CYAN)
-                    )
+                    }
 
 
                 }
-            }
-            Row(
-                modifier = Modifier
-            ) {
-                //Filed to input latitude and longitude
-                TextField(
-                    value = "",
-                    onValueChange = { TODO() },
-                    label = { Text("Latitude") },
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(16.dp)
-                )
-                TextField(
-                    value = "",
-                    onValueChange = { TODO() },
-                    label = { Text("Longitude") },
+                ) {
+                    Text("GMS API Location: ${current_Latitude.value},${current_Longitude.value}")
+                    Text("NMEA Location: ${nmea_latitude.value},${nmea_longitude.value}")
+                    Text("Manual Location: ${manual_latitude},${manual_longitude}")
+                }
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(16.dp)
-                )
-            }
+                ) {
+
+                    Button(
+                        modifier = Modifier,
+                        onClick = {
+                            openDialog = true
+                        }) {
+                        Row {
+                            Icon(
+                                painter = painterResource(id = R.drawable.baseline_edit_location_alt_24),
+                                contentDescription = "add a location",
+                                tint = MaterialTheme.colorScheme.surface
+                            )
+                            Text("Change manual location")
+                        }
+
+                    }
+                    val forceManager = LocalFocusManager.current
+
+                    //open dialog
+                    if (openDialog) {
+                        AlertDialog(
+                            onDismissRequest = { openDialog = false },
+                            title = { Text("Change manual location") },
+                            text = {
+                                Column {
+                                    OutlinedTextField(
+                                        value = editMessage,
+                                        onValueChange = { editMessage = it },
+                                        label = { Text("Latitude") },
+                                        keyboardOptions = KeyboardOptions.Default.copy(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        shape = RoundedCornerShape(16.dp),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                forceManager.moveFocus(FocusDirection.Down)
+                                                try{
+
+                                                    manual_latitude = editMessage.toDouble()
+                                                }catch (e:Exception){
+                                                    //do nothing
+                                                }
+                                            }
+                                        )
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editMessage1,
+                                        onValueChange = { editMessage1 = it },
+                                        label = { Text("Longitude") },
+                                        keyboardOptions = KeyboardOptions.Default.copy(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        shape = RoundedCornerShape(16.dp),
+                                        keyboardActions = KeyboardActions(
+                                            onNext = {
+                                                forceManager.clearFocus()
+                                                try{
+                                                    manual_longitude = editMessage1.toDouble()
+                                                }catch (e:Exception){
+                                                    //empty String, do nothing
+                                                }
+
+                                            }
+                                        )
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        try{
+                                            manual_latitude = editMessage.toDouble()
+                                            manual_longitude = editMessage1.toDouble()
+                                        }catch (e:Exception){
+                                            //empty String, do nothing
+                                        }
+                                        openDialog = false
+                                    }
+                                ) {
+                                    Text("Confirm")
+                                }
+                            },
+                            dismissButton = {
+                                Button(
+                                    onClick = {
+                                        openDialog = false
+                                    }
+                                ) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+                }
 
 
+            }
         }
+
+
     }
 }
-
-enum class SatelliteTypes {
-    GPS,
-    Galileo,
-    BeiDou,
-}
-
-data class Position(
-    val type: SatelliteTypes,
-    val quality_indicator: Double,
-    val timestamp: Long,
-
-    val latitude: Double,
-    val longitude: Double,
-
-    )
-
-
-//
-//@Preview(showBackground = false)
-//@Composable
-//fun DefaultPreview() {
-//    NMEATheme {
-//        initGPSgettingLogic()
-//    }
-//}
