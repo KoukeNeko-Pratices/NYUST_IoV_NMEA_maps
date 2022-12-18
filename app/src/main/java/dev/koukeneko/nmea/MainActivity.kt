@@ -9,11 +9,8 @@ import android.location.LocationManager
 import android.location.OnNmeaMessageListener
 import android.os.Bundle
 import android.util.Log
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +39,6 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import dev.koukeneko.nmea.ui.theme.NMEATheme
-import dev.koukeneko.nmea.utility.CustomDialog
 import dev.koukeneko.nmea.utility.NMEAFormatter
 
 
@@ -53,14 +49,14 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
 
     var isLocationPermissionGranted = mutableStateOf(false)
 
-    var datanmea = ""
-
     val current_Latitude = mutableStateOf(-1.0)
     val current_Longitude = mutableStateOf(-1.0)
 
     var nmea_latitude = mutableStateOf(-1.0)
     var nmea_longitude = mutableStateOf(-1.0)
 
+    var fist_latitude = mutableStateOf(-1.0)
+    var fist_longitude = mutableStateOf(-1.0)
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,8 +125,8 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                 // Got last known location. In some rare situations this can be null.
                 if (location != null) {
                     Log.d("Location", location.toString())
-                    current_Latitude.value = location.latitude
-                    current_Longitude.value = location.longitude
+                    fist_latitude.value = location.latitude
+                    fist_longitude.value = location.longitude
                     Log.d("Location", "${current_Latitude.value},${current_Longitude.value}")
                 } else {
                     Log.d("Location", "Location is null")
@@ -205,6 +201,38 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
         Log.d("NMEA_APP", "nmea_latitude : ${nmea_latitude.value}")
         Log.d("NMEA_APP", "nmea_longitude : ${nmea_longitude.value}")
 
+        //get last location from fusedLocationClient
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return
+        }
+        fusedLocationClient.lastLocation
+           .addOnSuccessListener { location: Location? ->
+                // Got last known location. In some rare situations this can be null.
+                if (location != null) {
+                     Log.d("Location", location.toString())
+                     current_Latitude.value = location.latitude
+                     current_Longitude.value = location.longitude
+                     Log.d("Location", "${current_Latitude.value},${current_Longitude.value}")
+                } else {
+                     Log.d("Location", "Location is null")
+                }
+              }
+
+
     }
 
 
@@ -220,9 +248,8 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
         val taipei = LatLng(25.04, 121.5)
 
 
-
-        var manual_latitude by remember { mutableStateOf(-1.0) }
-        var manual_longitude by remember { mutableStateOf(-1.0) }
+        var manualLatitude by remember { mutableStateOf(-1.0) }
+        var manualLongitude by remember { mutableStateOf(-1.0) }
         var openDialog by remember { mutableStateOf(false) }
         var editMessage by remember { mutableStateOf("") }
         var editMessage1 by remember { mutableStateOf("") }
@@ -234,20 +261,20 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
             } else {
                 CameraPosition.fromLatLngZoom(
                     LatLng(
-                        current_Latitude.value,
-                        current_Longitude.value
+                        fist_latitude.value,
+                        fist_longitude.value
                     ), 10f
                 )
             }
-            Log.d("CameraLocationUpdate", "${current_Latitude.value},${current_Longitude.value}")
+            Log.d("CameraLocationUpdate", "${fist_latitude.value},${fist_longitude.value}")
         }
 
         //if current_Latitude.value and current_Longitude.value change, camera position will change
-        LaunchedEffect(current_Latitude.value, current_Longitude.value) {
+        LaunchedEffect(fist_latitude.value, fist_longitude.value) {
             cameraPosition.move(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.fromLatLngZoom(
-                        LatLng(current_Latitude.value, current_Longitude.value),
+                        LatLng(fist_latitude.value, fist_longitude.value),
                         17f
                     )
                 )
@@ -288,7 +315,7 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
 
                 Card(
                     modifier = Modifier
-                        .height(550.dp),
+                        .height(520.dp),
                     //                    .padding(16.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -322,13 +349,13 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                         Marker(
                             state = MarkerState(
                                 position = LatLng(
-                                    manual_latitude,
-                                    manual_longitude
+                                    manualLatitude,
+                                    manualLongitude
                                 )
                             ),
-                            visible = manual_latitude != -1.0 && manual_latitude != -1.0,
+                            visible = manualLatitude != -1.0 && manualLatitude != -1.0,
                             title = "Manual",
-                            snippet = "${manual_latitude},${manual_longitude}",
+                            snippet = "${manualLatitude},${manualLongitude}",
                             icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
                         )
 
@@ -339,9 +366,12 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                 Column(
                     modifier = Modifier
                 ) {
-                    Text("GMS API Location: ${current_Latitude.value},${current_Longitude.value}")
-                    Text("NMEA Location: ${nmea_latitude.value},${nmea_longitude.value}")
-                    Text("Manual Location: ${manual_latitude},${manual_longitude}")
+                    Text("GMS API Location", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                    Text("${current_Latitude.value},${current_Longitude.value}")
+                    Text("NMEA Location", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                    Text("${nmea_latitude.value},${nmea_longitude.value}")
+                    Text("Manual Location", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                    Text("${manualLatitude},${manualLongitude}")
                 }
                 Row(
                     modifier = Modifier
@@ -385,7 +415,7 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                                                 forceManager.moveFocus(FocusDirection.Down)
                                                 try{
 
-                                                    manual_latitude = editMessage.toDouble()
+                                                    manualLatitude = editMessage.toDouble()
                                                 }catch (e:Exception){
                                                     //do nothing
                                                 }
@@ -406,7 +436,7 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                                             onNext = {
                                                 forceManager.clearFocus()
                                                 try{
-                                                    manual_longitude = editMessage1.toDouble()
+                                                    manualLongitude = editMessage1.toDouble()
                                                 }catch (e:Exception){
                                                     //empty String, do nothing
                                                 }
@@ -420,8 +450,8 @@ class MainActivity : ComponentActivity(), LocationListener, OnNmeaMessageListene
                                 Button(
                                     onClick = {
                                         try{
-                                            manual_latitude = editMessage.toDouble()
-                                            manual_longitude = editMessage1.toDouble()
+                                            manualLatitude = editMessage.toDouble()
+                                            manualLongitude = editMessage1.toDouble()
                                         }catch (e:Exception){
                                             //empty String, do nothing
                                         }
